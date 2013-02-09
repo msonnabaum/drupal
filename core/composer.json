@@ -2,6 +2,11 @@
   "name": "drupal/drupal",
   "description": "Drupal is an open source content management platform powering millions of websites and applications.",
   "license": "GPL-2.0+",
+  "repositories": [{
+    "type": "vcs",
+    "url": "https://github.com/msonnabaum/phpunit.git"
+  }
+  ],
   "require": {
     "symfony/class-loader": "2.2.0-BETA2",
     "symfony/dependency-injection": "2.2.0-BETA2",

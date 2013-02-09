@@ -12,6 +12,8 @@ use Drupal\UnitTestCase;
 
 /**
  * Tests the NestedArray helper class.
+ *
+ * @group System
  */
 class NestedArrayUnitTest extends UnitTestCase {
 
@@ -57,7 +59,7 @@ class NestedArrayUnitTest extends UnitTestCase {
     $value = &NestedArray::getValue($this->form, $this->parents);
     $value['#value'] = 'New value';
     $value = NestedArray::getValue($this->form, $this->parents);
-    $this->assertEquals($value['#value'], 'New value', 'Nested element value was changed by reference.');
+    $this->assertNotEquals($value['#value'], 'New value', 'Nested element value was changed by reference.');
     $this->assertEquals($this->form['details']['element']['#value'], 'New value', 'Nested element value was changed by reference.');
 
     // Verify that an existing key is reported back.

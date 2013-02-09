@@ -3,7 +3,15 @@
 namespace Drupal;
 
 class UnitTestCase extends \PHPUnit_Framework_TestCase {
-  
+
+  public static function getInfo() {
+    return array(
+      'name' => 'test name',
+      'description' => 'test description',
+      'group' => 'somegroup',
+    );
+  }
+
   /**
    * Generates a random string containing letters and numbers.
    *

@@ -127,24 +127,30 @@ function _simpletest_format_summary_line($summary) {
  */
 function simpletest_run_tests($test_list, $reporter = 'drupal') {
 
+  $test_id = db_insert('simpletest_test_id')
+    ->useDefaults(array('test_id'))
+    ->execute();
+
   // We will do our Unit Tests first, so we don't do anything else if there is
   // a fatal error.
+  $phpunit_tests = array_map(function($class) {
+    return str_replace("\\", "\\\\", $class);
+  }, $test_list['UnitTest']);
 
-  /**
-   * Placeholder for running PHPUnit tests.
-   * The list of user's selected tests is $test_list['UnitTest'];
-   */
+  $phpunit_results = simpletest_run_phpunit_tests($test_id, $phpunit_tests);
+  $query = db_insert('simpletest')->fields(array_keys($phpunit_results[0]));
+  foreach ($phpunit_results as $result) {
+    $query->values($result);
+  }
+  $query->execute();
 
-  // Contine with SimpleTests only.
   if (!array_key_exists('WebTest', $test_list) || empty($test_list['WebTest'])) {
     //Early return if there are no WebTests to run.
     return $test_id;
   }
-  $test_list = $test_list['WebTest'];
 
-  $test_id = db_insert('simpletest_test_id')
-    ->useDefaults(array('test_id'))
-    ->execute();
+  // Contine with SimpleTests only.
+  $test_list = $test_list['WebTest'];
 
   // Clear out the previous verbose files.
   file_unmanaged_delete_recursive('public://simpletest/verbose');
@@ -170,6 +176,23 @@ function simpletest_run_tests($test_list, $reporter = 'drupal') {
   module_invoke_all('test_group_started');
 
   return $test_id;
+}
+
+function simpletest_run_phpunit_tests($test_id, $tests) {
+  $junit_file = drupal_realpath('public://simpletest') . '/junit.xml';
+  $filter_string = implode("|", $tests);
+  $phpunit_bin = DRUPAL_ROOT . "/core/vendor/bin/phpunit";
+  $command = array(
+    $phpunit_bin,
+    '--filter',
+    escapeshellarg($filter_string),
+    '--log-junit',
+    escapeshellarg($junit_file),
+  );
+
+  exec(join($command, " "));
+
+  return simpletest_phpunit_xml_to_rows($test_id, $junit_file);
 }
 
 /**
@@ -417,6 +440,8 @@ function simpletest_classloader_register() {
       drupal_get_filename($type, $name, $file->uri);
     }
   }
+
+  drupal_classloader()->registerNamespace('Drupal', DRUPAL_ROOT . '/core/tests');
 }
 
 /**
@@ -591,13 +616,6 @@ function simpletest_library_info() {
  * @param bool $name_only If TRUE, returns a flat array of class names only.
  */
 function _simpletest_get_phpunit() {
-  // @todo Delete when this is added to the SimpleTest class loader.
-  // Tell the loader where to find the Parent class for our PHPUnit classes.
-  $loader = drupal_classloader();
-  $loader->registerNamespace('Drupal', DRUPAL_ROOT . '/core/tests');
-  drupal_classloader($loader);
-  // @todo End.
-
   // Load the PHPUnit configuration file, which tells us where to find the tests.
   $configuration = PHPUnit_Util_Configuration::getInstance('core/phpunit.xml.dist');
   // Find all the tests and get a list of unique class names.
@@ -611,4 +629,34 @@ function _simpletest_get_phpunit() {
   }
 
   return $test_classes;
+}
+
+function simpletest_phpunit_xml_to_rows($test_id, $phpunit_xml_file) {
+  $contents = file_get_contents($phpunit_xml_file);
+  $xml = new SimpleXMLElement($contents);
+  $records = array();
+  foreach ($xml->testsuite as $testsuite) {
+    foreach ($testsuite as $suite) {
+      foreach ($suite as $testcase) {
+        $message = '';
+        if ($testcase->failure) {
+          $lines = explode("\n", $testcase->failure);
+          $message = $lines[2];
+        }
+        $attributes = $testcase->attributes();
+        $records[] = array(
+          //    'message_id' => 10998,
+          'test_id' => $test_id,
+          'test_class' => (string)$attributes->class,
+          'status' => empty($testcase->failure) ? 'pass' : 'fail',
+          'message' => $message,
+          'message_group' => 'Other', // TODO: Check on the proper values for this.
+          'function' => $attributes->class . '->' . $attributes->name . '()',
+          'line' => (string)$attributes->line,
+          'file' => (string)$attributes->file,
+        );
+      }
+    }
+  }
+  return $records;
 }

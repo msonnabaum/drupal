@@ -4,6 +4,9 @@
   <testsuites>
     <testsuite name="Drupal Unit Test Suite">
       <directory>./tests/*</directory>
+      <!--<directory>./modules/*/tests/*</directory>
+      <directory>../modules/*/tests/*</directory>
+      <directory>../sites/*/modules/*/tests/*</directory>-->
     </testsuite>
   </testsuites>
 </phpunit>
