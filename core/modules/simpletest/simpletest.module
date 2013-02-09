@@ -126,6 +126,18 @@ function _simpletest_format_summary_line($summary) {
  *   drupal being the default.
  */
 function simpletest_run_tests($test_list, $reporter = 'drupal') {
+
+  // We will do our Unit Tests first, so we don't do anything else if there is
+  // a fatal error.
+
+  /**
+   * Placeholder for running PHPUnit tests.
+   * The list of user's selected tests is $test_list['UnitTest'];
+   */
+
+  // Contine with SimpleTests only.
+  $test_list = $test_list['WebTest'];
+
   $test_id = db_insert('simpletest_test_id')
     ->useDefaults(array('test_id'))
     ->execute();
@@ -567,4 +579,32 @@ function simpletest_library_info() {
   );
 
   return $libraries;
+}
+
+/**
+ * Get PHPUnit Classes
+ *
+ * @param bool $name_only If TRUE, returns a flat array of class names only.
+ */
+function _simpletest_get_phpunit() {
+  // @todo Delete when this is added to the SimpleTest class loader.
+  // Tell the loader where to find the Parent class for our PHPUnit classes.
+  $loader = drupal_classloader();
+  $loader->registerNamespace('Drupal', DRUPAL_ROOT . '/core/tests');
+  drupal_classloader($loader);
+  // @todo End.
+
+  // Load the PHPUnit configuration file, which tells us where to find the tests.
+  $configuration = PHPUnit_Util_Configuration::getInstance('core/phpunit.xml.dist');
+  // Find all the tests and get a list of unique class names.
+  $test_suite = $configuration->getTestSuiteConfiguration(null);
+  $test_classes = array();
+  foreach ($test_suite AS $test) {
+    $name = get_class($test);
+    if (!array_key_exists($name, $test_classes)) {
+      $test_classes[$name] =  $test->getInfo();
+    }
+  }
+
+  return $test_classes;
 }
