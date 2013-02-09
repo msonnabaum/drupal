@@ -441,7 +441,16 @@ function simpletest_classloader_register() {
     }
   }
 
+  // Register the core test directory so we can find Drupal\UnitTestCase.
   drupal_classloader()->registerNamespace('Drupal', DRUPAL_ROOT . '/core/tests');
+
+  // Manually register phpunit prefixes because they use a classmap instead of a
+  // prefix. This can be safely removed if we move to using composer's
+  // autoloader with a classmap.
+  drupal_classloader()->registerPrefixes(array(
+    'PHPUnit' => DRUPAL_ROOT . '/core/vendor/phpunit/phpunit',
+    'File_Iterator' => DRUPAL_ROOT . '/core/vendor/phpunit/php-file-iterator/',
+  ));
 }
 
 /**
