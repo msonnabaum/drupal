@@ -136,6 +136,10 @@ function simpletest_run_tests($test_list, $reporter = 'drupal') {
    */
 
   // Contine with SimpleTests only.
+  if (!array_key_exists('WebTest', $test_list) || empty($test_list['WebTest'])) {
+    //Early return if there are no WebTests to run.
+    return $test_id;
+  }
   $test_list = $test_list['WebTest'];
 
   $test_id = db_insert('simpletest_test_id')
