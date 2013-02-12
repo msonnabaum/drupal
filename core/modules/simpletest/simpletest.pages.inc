@@ -21,7 +21,7 @@ function simpletest_test_form($form, &$form_state) {
 
   // Generate the list of tests arranged by group.
   $groups = simpletest_test_get_all();
-  $groups['PHPUnit'] = _simpletest_get_phpunit();
+  $groups['PHPUnit'] = simpletest_phpunit_get_available_tests();
   $form_state['storage']['PHPUnit'] = $groups['PHPUnit'];
 
   foreach ($groups as $group => $tests) {
