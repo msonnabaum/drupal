@@ -130,14 +130,17 @@ function simpletest_run_tests($test_list, $reporter = 'drupal') {
     ->useDefaults(array('test_id'))
     ->execute();
 
-  $phpunit_results = simpletest_run_phpunit_tests($test_id, $test_list['UnitTest']);
+  $phpunit_tests = @$test_list['UnitTest'] ?: array();
+  $phpunit_results = simpletest_run_phpunit_tests($test_id, $phpunit_tests);
   // Insert the results of the phpunit test run into the db so the results are
   // displayed along with simpletest's results.
-  $query = db_insert('simpletest')->fields(array_keys($phpunit_results[0]));
-  foreach ($phpunit_results as $result) {
-    $query->values($result);
+  if (!empty($phpunit_results)) {
+    $query = db_insert('simpletest')->fields(array_keys($phpunit_results[0]));
+    foreach ($phpunit_results as $result) {
+      $query->values($result);
+    }
+    $query->execute();
   }
-  $query->execute();
 
   if (!array_key_exists('WebTest', $test_list) || empty($test_list['WebTest'])) {
     // Early return if there are no WebTests to run.
