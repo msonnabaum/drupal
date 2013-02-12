@@ -2,15 +2,13 @@
 
 /**
  * @file
- * Definition of Drupal\system\Tests\Cache\GenericCacheBackendUnitTestCase.
+ * Definition of Drupal\Tests\Core\Cache\GenericCacheBackendUnitTestCase.
  */
 
-namespace Drupal\system\Tests\Cache;
+namespace Drupal\Tests\Core\Cache;
 
 use Drupal\Core\Cache\CacheBackendInterface;
-use Drupal\UnitTestCase;
-
-use stdClass;
+use Drupal\Tests\UnitTestCase;
 
 /**
  * Tests any cache backend.

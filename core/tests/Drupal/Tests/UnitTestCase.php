@@ -1,6 +1,10 @@
 <?php
 
-namespace Drupal;
+/**
+ * @file
+ * Contains \Drupal\Tests\UnitTestCase.
+ */
+namespace Drupal\Tests;
 
 class UnitTestCase extends \PHPUnit_Framework_TestCase {
 

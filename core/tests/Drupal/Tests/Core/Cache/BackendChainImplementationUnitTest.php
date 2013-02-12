@@ -2,15 +2,15 @@
 
 /**
  * @file
- * Definition of Drupal\Core\Cache\BackendChainImplementationUnitTest.
+ * Definition of Drupal\Tests\Core\Cache\BackendChainImplementationUnitTest.
  */
 
-namespace Drupal\Core\Cache;
+namespace Drupal\Tests\Core\Cache;
 
 use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Cache\BackendChain;
 use Drupal\Core\Cache\MemoryBackend;
-use Drupal\UnitTestCase;
+use Drupal\Tests\UnitTestCase;
 
 /**
  * Tests implementation-specific functionality of the BackendChain backend.

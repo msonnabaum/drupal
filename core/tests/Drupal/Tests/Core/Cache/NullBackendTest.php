@@ -2,13 +2,13 @@
 
 /**
  * @file
- * Definition of Drupal\system\Tests\Cache\NullBackendTest.
+ * Definition of Drupal\Tests\Core\Cache\NullBackendTest.
  */
 
-namespace Drupal\system\Tests\Cache;
+namespace Drupal\Tests\Core\Cache;
 
 use Drupal\Core\Cache\NullBackend;
-use Drupal\UnitTestCase;
+use Drupal\Tests\UnitTestCase;
 
 /**
  * Tests the cache NullBackend.
