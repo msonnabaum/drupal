@@ -8,11 +8,18 @@ namespace Drupal\Tests;
 
 class UnitTestCase extends \PHPUnit_Framework_TestCase {
 
+  /**
+   * This method exists to support the simpletest UI runner. It should
+   * eventually be replaced with something native to phpunit.
+   *
+   * Also, this method is empty because you can't have an abstract static
+   * method. Sub-classes should always override it.
+   */
   public static function getInfo() {
     return array(
-      'name' => 'test name',
-      'description' => 'test description',
-      'group' => 'somegroup',
+      'name' => '',
+      'description' => '',
+      'group' => '',
     );
   }
 
