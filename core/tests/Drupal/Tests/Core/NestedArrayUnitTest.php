@@ -53,14 +53,14 @@ class NestedArrayUnitTest extends UnitTestCase {
   function testGetValue() {
     // Verify getting a value of a nested element.
     $value = NestedArray::getValue($this->form, $this->parents);
-    $this->assertSame($value['#value'], 'Nested element', 'Nested element value found.');
+    $this->assertEquals($value['#value'], 'Nested element', 'Nested element value found.');
 
     // Verify changing a value of a nested element by reference.
     $value = &NestedArray::getValue($this->form, $this->parents);
     $value['#value'] = 'New value';
     $value = NestedArray::getValue($this->form, $this->parents);
-    $this->assertSame($value['#value'], 'New value', 'Nested element value was changed by reference.');
-    $this->assertSame($this->form['details']['element']['#value'], 'New value', 'Nested element value was changed by reference.');
+    $this->assertEquals($value['#value'], 'New value', 'Nested element value was changed by reference.');
+    $this->assertEquals($this->form['details']['element']['#value'], 'New value', 'Nested element value was changed by reference.');
 
     // Verify that an existing key is reported back.
     $key_exists = NULL;
@@ -86,7 +86,7 @@ class NestedArrayUnitTest extends UnitTestCase {
 
     // Verify setting the value of a nested element.
     NestedArray::setValue($this->form, $this->parents, $new_value);
-    $this->assertSame($this->form['details']['element']['#value'], 'New value', 'Changed nested element value found.');
+    $this->assertEquals($this->form['details']['element']['#value'], 'New value', 'Changed nested element value found.');
     $this->assertSame($this->form['details']['element']['#required'], TRUE, 'New nested element value found.');
   }
 
