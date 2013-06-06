@@ -1,9 +1,13 @@
 <?php
 
 use Drupal\Component\Utility\Crypt;
+use Drupal\Component\Utility\Settings;
 
+use Drupal\Core\Config\Config;
 use Drupal\Core\Config\FileStorage;
 use Drupal\Core\DrupalKernel;
+use Drupal\Core\Bootstrap\SettingsFileReader;
+use Drupal\Core\HttpKernelBuilder;
 use Drupal\Core\CoreBundle;
 use Drupal\Core\Database\Database;
 use Drupal\Core\Database\Install\TaskException;
@@ -261,17 +265,25 @@ function install_begin_request(&$install_state) {
   }
 
   // Allow command line scripts to override server variables used by Drupal.
+  require_once __DIR__ . '/../vendor/autoload.php';
   require_once __DIR__ . '/bootstrap.inc';
 
   if (!$install_state['interactive']) {
     drupal_override_server_variables($install_state['server']);
   }
 
+  // A request object from the HTTPFoundation to tell us about the request.
+  $request = Request::createFromGlobals();
   // Initialize conf_path().
   // This primes the site path to be used during installation. By not requiring
   // settings.php, a bare site folder can be prepared in the /sites directory,
   // which will be used for installing Drupal.
-  conf_path(FALSE);
+  //conf_path(FALSE);
+  $settings_file = new SettingsFileReader($request, DRUPAL_ROOT);
+  $settings_file->loadSettingsFile();
+  $install_state['settings_file'] = $settings_file;
+  Config::setDirectories($settings_file->getConfigDirectories());
+  Database::setConnectionInfo($settings_file->getDatabaseInfo());
 
   drupal_bootstrap(DRUPAL_BOOTSTRAP_CONFIGURATION);
 
@@ -286,8 +298,6 @@ function install_begin_request(&$install_state) {
     exit;
   }
 
-  // A request object from the HTTPFoundation to tell us about the request.
-  $request = Request::createFromGlobals();
 
   // This must go after drupal_bootstrap(), which unsets globals!
   global $conf;
@@ -300,8 +310,12 @@ function install_begin_request(&$install_state) {
     $GLOBALS['conf']['language_default'] = array('langcode' => $install_state['parameters']['langcode']);
   }
 
+  new Settings(isset($settings) ? $settings : array());
+  require_once __DIR__ . '/../lib/Drupal.php';
   require_once __DIR__ . '/../modules/system/system.install';
   require_once __DIR__ . '/common.inc';
+  require_once __DIR__ . '/config.inc';
+  require_once __DIR__ . '/theme.inc';
   require_once __DIR__ . '/file.inc';
   require_once __DIR__ . '/install.inc';
   require_once __DIR__ . '/schema.inc';
@@ -311,6 +325,7 @@ function install_begin_request(&$install_state) {
   include_once __DIR__ . '/module.inc';
   include_once __DIR__ . '/session.inc';
   require_once __DIR__ . '/entity.inc';
+
 
   // Determine whether the configuration system is ready to operate.
   $install_state['config_verified'] = install_verify_config_directory(CONFIG_ACTIVE_DIRECTORY) && install_verify_config_directory(CONFIG_STAGING_DIRECTORY);
@@ -342,15 +357,23 @@ function install_begin_request(&$install_state) {
   // database has been set up successfully.
   // @see drupal_install_config_directories()
   // @see install_settings_form_submit()
-  if ($install_state['settings_verified']) {
-    $kernel = new DrupalKernel('install', FALSE, drupal_classloader(), FALSE);
+  //if ($install_state['settings_verified']) {
+
+
+
+    $builder = new HttpKernelBuilder();
+    $builder->add('\Drupal\Core\Middleware\Settings', array(DRUPAL_ROOT));
+    $builder->add('\Drupal\Core\Middleware\Configuration');
+    $builder->add('\Drupal\Core\Middleware\Timer');
+    $kernel = $builder->build(new DrupalKernel('install', FALSE, FALSE));
     $kernel->boot();
     // Set the request in the kernel to the new created Request above
     // so it is available to the rest of the installation process.
-    $kernel->getContainer()
-      ->set('request', $request);
-  }
-  else {
+
+    $kernel->getContainer()->set('request', $request);
+    //}
+  //else {
+  if (!$install_state['settings_verified']) {
     // @todo Move into a proper Drupal\Core\DependencyInjection\InstallContainerBuilder.
     $container = new ContainerBuilder();
 
@@ -410,6 +433,7 @@ function install_begin_request(&$install_state) {
     // Register Twig template engine for use during install.
     CoreBundle::registerTwig($container);
 
+    $container->set('request', $request);
     Drupal::setContainer($container);
   }
 
@@ -1018,11 +1042,13 @@ function install_verify_database_settings() {
  * @ingroup forms
  */
 function install_settings_form($form, &$form_state, &$install_state) {
-  global $databases;
+  //global $databases;
 
+  $settings_file = $install_state['settings_file'];
+  $databases = $settings_file->getDatabaseInfo();
   drupal_static_reset('conf_path');
-  $conf_path = './' . conf_path(FALSE);
-  $settings_file = $conf_path . '/settings.php';
+  //$conf_path = './' . conf_path(FALSE);
+  //$settings_file = $conf_path . '/settings.php';
   $database = isset($databases['default']['default']) ? $databases['default']['default'] : array();
 
   drupal_set_title(st('Database configuration'));
@@ -1070,7 +1096,7 @@ function install_settings_form($form, &$form_state, &$install_state) {
   );
 
   $form['errors'] = array();
-  $form['settings_file'] = array('#type' => 'value', '#value' => $settings_file);
+  $form['settings_file'] = array('#type' => 'value', '#value' => $settings_file->getSettingsFilePath());
 
   return $form;
 }

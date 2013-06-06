@@ -466,6 +466,7 @@ function _theme_process_registry(&$cache, $name, $type, $theme, $path) {
   $function = $name . '_theme';
   if (function_exists($function)) {
     $result = $function($cache, $type, $theme, $path);
+    $module_list = drupal_container()->get('module_handler')->getModuleList();
     foreach ($result as $hook => $info) {
       // When a theme or engine overrides a module's theme function
       // $result[$hook] will only contain key/value pairs for information being
@@ -525,7 +526,7 @@ function _theme_process_registry(&$cache, $name, $type, $theme, $path) {
             // Add all modules so they can intervene with their own variable
             // processors. This allows them to provide variable processors even
             // if they are not the owner of the current hook.
-            $prefixes = array_merge($prefixes, array_keys(drupal_container()->get('module_handler')->getModuleList()));
+            $prefixes = array_merge($prefixes, array_keys($module_list));
           }
           elseif ($type == 'theme_engine' || $type == 'base_theme_engine') {
             // Theme engines get an extra set that come before the normally
@@ -933,11 +934,18 @@ function drupal_find_base_themes($themes, $key, $used_keys = array()) {
  */
 function theme($hook, $variables = array()) {
   static $default_attributes;
+  static $modules_loaded = FALSE;
   // If called before all modules are loaded, we do not necessarily have a full
   // theme registry to work with, and therefore cannot process the theme
   // request properly. See also _theme_load_registry().
-  if (!drupal_container()->get('module_handler')->isLoaded() && !defined('MAINTENANCE_MODE')) {
-    throw new Exception(t('theme() may not be called until all modules are loaded.'));
+
+  if (!$modules_loaded) {
+    if (!drupal_container()->get('module_handler')->isLoaded() && !defined('MAINTENANCE_MODE')) {
+      throw new Exception(t('theme() may not be called until all modules are loaded.'));
+    }
+    else {
+      $modules_loaded = TRUE;
+    }
   }
 
   $hooks = theme_get_registry(FALSE);

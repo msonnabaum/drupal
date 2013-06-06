@@ -8,8 +8,10 @@ use Drupal\Component\Utility\Timer;
 use Drupal\Component\Utility\Unicode;
 use Drupal\Component\Utility\UrlValidator;
 use Drupal\Core\DrupalKernel;
+use Drupal\Core\HttpKernelBuilder;
 use Drupal\Core\Database\Database;
 use Drupal\Core\DependencyInjection\ContainerBuilder;
+use Drupal\Core\Config\Config;
 use Symfony\Component\ClassLoader\ClassLoader;
 use Symfony\Component\ClassLoader\ApcClassLoader;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -427,7 +429,7 @@ function find_conf_path($http_host, $script_name, $require_settings = TRUE) {
  *   The configuration directory path.
  */
 function config_get_config_directory($type = CONFIG_ACTIVE_DIRECTORY) {
-  global $config_directories;
+  $config_directories = Config::getDirectories();
 
   if (!empty($config_directories[$type])) {
     // Allow a configuration directory path to be outside of webroot.
@@ -581,128 +583,8 @@ function drupal_valid_http_host($host) {
   return preg_match('/^\[?(?:[a-zA-Z0-9-:\]_]+\.?)+$/', $host);
 }
 
-/**
- * Sets the base URL, cookie domain, and session name from configuration.
- */
-function drupal_settings_initialize() {
-  global $base_url, $base_path, $base_root, $script_path;
 
-  // Export these settings.php variables to the global namespace.
-  global $databases, $cookie_domain, $conf, $db_prefix, $drupal_hash_salt, $base_secure_url, $base_insecure_url, $config_directories;
-  $conf = array();
 
-  // Make conf_path() available as local variable in settings.php.
-  $conf_path = conf_path();
-  if (is_readable(DRUPAL_ROOT . '/' . $conf_path . '/settings.php')) {
-    include_once DRUPAL_ROOT . '/' . $conf_path . '/settings.php';
-  }
-  require_once DRUPAL_ROOT . '/core/lib/Drupal/Component/Utility/Settings.php';
-  new Settings(isset($settings) ? $settings : array());
-  $is_https = isset($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) == 'on';
-
-  if (isset($base_url)) {
-    // Parse fixed base URL from settings.php.
-    $parts = parse_url($base_url);
-    if (!isset($parts['path'])) {
-      $parts['path'] = '';
-    }
-    $base_path = $parts['path'] . '/';
-    // Build $base_root (everything until first slash after "scheme://").
-    $base_root = substr($base_url, 0, strlen($base_url) - strlen($parts['path']));
-  }
-  else {
-    // Create base URL
-    $http_protocol = $is_https ? 'https' : 'http';
-    $base_root = $http_protocol . '://' . $_SERVER['HTTP_HOST'];
-
-    $base_url = $base_root;
-
-    // For a request URI of '/index.php/foo', $_SERVER['SCRIPT_NAME'] is
-    // '/index.php', whereas $_SERVER['PHP_SELF'] is '/index.php/foo'.
-    if ($dir = rtrim(dirname($_SERVER['SCRIPT_NAME']), '\/')) {
-      // Remove "core" directory if present, allowing install.php, update.php,
-      // and others to auto-detect a base path.
-      $core_position = strrpos($dir, '/core');
-      if ($core_position !== FALSE && strlen($dir) - 5 == $core_position) {
-        $base_path = substr($dir, 0, $core_position);
-      }
-      else {
-        $base_path = $dir;
-      }
-      $base_url .= $base_path;
-      $base_path .= '/';
-    }
-    else {
-      $base_path = '/';
-    }
-  }
-  $base_secure_url = str_replace('http://', 'https://', $base_url);
-  $base_insecure_url = str_replace('https://', 'http://', $base_url);
-
-  // Determine the path of the script relative to the base path, and add a
-  // trailing slash. This is needed for creating URLs to Drupal pages.
-  if (!isset($script_path)) {
-    $script_path = '';
-    // We don't expect scripts outside of the base path, but sanity check
-    // anyway.
-    if (strpos($_SERVER['SCRIPT_NAME'], $base_path) === 0) {
-      $script_path = substr($_SERVER['SCRIPT_NAME'], strlen($base_path)) . '/';
-      // If the request URI does not contain the script name, then clean URLs
-      // are in effect and the script path can be similarly dropped from URL
-      // generation. For servers that don't provide $_SERVER['REQUEST_URI'], we
-      // do not know the actual URI requested by the client, and request_uri()
-      // returns a URI with the script name, resulting in non-clean URLs unless
-      // there's other code that intervenes.
-      if (strpos(request_uri(TRUE) . '/', $base_path . $script_path) !== 0) {
-        $script_path = '';
-      }
-      // @todo Temporary BC for install.php, update.php, and other scripts.
-      //   - http://drupal.org/node/1547184
-      //   - http://drupal.org/node/1546082
-      if ($script_path !== 'index.php/') {
-        $script_path = '';
-      }
-    }
-  }
-
-  if ($cookie_domain) {
-    // If the user specifies the cookie domain, also use it for session name.
-    $session_name = $cookie_domain;
-  }
-  else {
-    // Otherwise use $base_url as session name, without the protocol
-    // to use the same session identifiers across HTTP and HTTPS.
-    list( , $session_name) = explode('://', $base_url, 2);
-    // HTTP_HOST can be modified by a visitor, but we already sanitized it
-    // in drupal_settings_initialize().
-    if (!empty($_SERVER['HTTP_HOST'])) {
-      $cookie_domain = $_SERVER['HTTP_HOST'];
-      // Strip leading periods, www., and port numbers from cookie domain.
-      $cookie_domain = ltrim($cookie_domain, '.');
-      if (strpos($cookie_domain, 'www.') === 0) {
-        $cookie_domain = substr($cookie_domain, 4);
-      }
-      $cookie_domain = explode(':', $cookie_domain);
-      $cookie_domain = '.' . $cookie_domain[0];
-    }
-  }
-  // Per RFC 2109, cookie domains must contain at least one dot other than the
-  // first. For hosts such as 'localhost' or IP Addresses we don't set a cookie domain.
-  if (count(explode('.', $cookie_domain)) > 2 && !is_numeric(str_replace('.', '', $cookie_domain))) {
-    ini_set('session.cookie_domain', $cookie_domain);
-  }
-  // To prevent session cookies from being hijacked, a user can configure the
-  // SSL version of their website to only transfer session cookies via SSL by
-  // using PHP's session.cookie_secure setting. The browser will then use two
-  // separate session cookies for the HTTPS and HTTP versions of the site. So we
-  // must use different session identifiers for HTTPS and HTTP to prevent a
-  // cookie collision.
-  if ($is_https) {
-    ini_set('session.cookie_secure', TRUE);
-  }
-  $prefix = ini_get('session.cookie_secure') ? 'SSESS' : 'SESS';
-  session_name($prefix . substr(hash('sha256', $session_name), 0, 32));
-}
 
 /**
  * Returns and optionally sets the filename for a system resource.
@@ -965,15 +847,15 @@ function variable_del($name) {
  *   The cache object, if the page was found in the cache, NULL otherwise.
  */
 function drupal_page_get_cache($check_only = FALSE) {
-  global $base_root;
   static $cache_hit = FALSE;
 
   if ($check_only) {
     return $cache_hit;
   }
 
+  $request = \Drupal::request();
   if (drupal_page_is_cacheable()) {
-    $cache = cache('page')->get($base_root . request_uri());
+    $cache = cache('page')->get($request->getSchemeAndHttpHost() . $request->getRequestUri());
     if ($cache !== FALSE) {
       $cache_hit = TRUE;
     }
@@ -1567,7 +1449,7 @@ function watchdog_exception($type, Exception $exception, $message = NULL, $varia
  * @see hook_watchdog()
  */
 function watchdog($type, $message, array $variables = NULL, $severity = WATCHDOG_NOTICE, $link = NULL) {
-  global $user, $base_root;
+  global $user;
 
   static $in_error_state = FALSE;
 
@@ -1579,6 +1461,8 @@ function watchdog($type, $message, array $variables = NULL, $severity = WATCHDOG
     // The user object may not exist in all conditions, so 0 is substituted if needed.
     $user_uid = isset($user->uid) ? $user->uid : 0;
 
+    $request = Drupal::request();
+
     // Prepare the fields to be logged
     $log_entry = array(
       'type'        => $type,
@@ -1588,9 +1472,9 @@ function watchdog($type, $message, array $variables = NULL, $severity = WATCHDOG
       'link'        => $link,
       'user'        => $user,
       'uid'         => $user_uid,
-      'request_uri' => $base_root . request_uri(),
-      'referer'     => isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '',
-      'ip'          => Drupal::request()->getClientIP(),
+      'request_uri' => $request->getSchemeAndHttpHost() . $request->getRequestUri(),
+      'referer'     => $request->server->get('HTTP_REFERER') ?: '',
+      'ip'          => $request->getClientIP(),
       // Request time isn't accurate for long processes, use time() instead.
       'timestamp'   => time(),
     );
@@ -1893,23 +1777,22 @@ function drupal_bootstrap($phase = NULL, $new_phase = TRUE) {
  * @see index.php
  */
 function drupal_handle_request($test_only = FALSE) {
-  // Initialize the environment, load settings.php, and activate a PSR-0 class
-  // autoloader with required namespaces registered.
-  drupal_bootstrap(DRUPAL_BOOTSTRAP_CONFIGURATION);
+  require dirname(__FILE__) . '/../vendor/autoload.php';
+  // Make sure the \Drupal class is available.
+  require_once DRUPAL_ROOT . '/core/lib/Drupal.php';
+
+  $builder = new HttpKernelBuilder();
+  $builder->add('\Drupal\Core\Middleware\Settings', array(DRUPAL_ROOT));
+  $builder->add('\Drupal\Core\Middleware\Configuration');
+  $builder->add('\Drupal\Core\Middleware\Timer');
+  // @todo Figure out how best to handle the Kernel constructor parameters.
+  $kernel = $builder->build(new DrupalKernel('prod', FALSE, !$test_only));
 
   // Exit if we should be in a test environment but aren't.
   if ($test_only && !drupal_valid_test_ua()) {
     header($_SERVER['SERVER_PROTOCOL'] . ' 403 Forbidden');
     exit;
   }
-
-  // @todo Figure out how best to handle the Kernel constructor parameters.
-  $kernel = new DrupalKernel('prod', FALSE, drupal_classloader(), !$test_only);
-
-  // @todo Remove this once everything in the bootstrap has been
-  //   converted to services in the DIC.
-  $kernel->boot();
-  drupal_bootstrap(DRUPAL_BOOTSTRAP_CODE);
 
   // Create a request object from the HttpFoundation.
   $request = Request::createFromGlobals();
@@ -1943,10 +1826,7 @@ function drupal_get_user_timezone() {
  *   A salt based on information in settings.php, not in the database.
  */
 function drupal_get_hash_salt() {
-  global $drupal_hash_salt, $databases;
-  // If the $drupal_hash_salt variable is empty, a hash of the serialized
-  // database credentials is used as a fallback salt.
-  return empty($drupal_hash_salt) ? hash('sha256', serialize($databases)) : $drupal_hash_salt;
+  return \Drupal::hashSalt();
 }
 
 /**
@@ -2001,23 +1881,24 @@ function _drupal_exception_handler($exception) {
  * Sets up the script environment and loads settings.php.
  */
 function _drupal_bootstrap_configuration() {
-  drupal_environment_initialize();
+  //drupal_environment_initialize();
   // Initialize the configuration, including variables from settings.php.
-  drupal_settings_initialize();
+  //drupal_settings_initialize();
 
   // Make sure we are using the test database prefix in child Drupal sites.
-  _drupal_initialize_db_test_prefix();
+  //_drupal_initialize_db_test_prefix();
 
   // Activate the class loader.
-  drupal_classloader();
+  //drupal_classloader();
 
   // Start a page timer:
-  Timer::start('page');
+  //Timer::start('page');
 
   // Detect string handling method.
-  Unicode::check();
+  //Unicode::check();
 
   // Load the procedural configuration system helper functions.
+  /*
   require_once __DIR__ . '/config.inc';
 
   // Set the Drupal custom error handler. (requires config())
@@ -2029,8 +1910,9 @@ function _drupal_bootstrap_configuration() {
   // settings.php file) and we are not already installing.
   if (empty($GLOBALS['databases']) && !drupal_installation_attempted()) {
     include_once __DIR__ . '/install.inc';
-    install_goto('core/install.php');
+    nstall_goto('core/install.php');
   }
+  */
 }
 
 /**

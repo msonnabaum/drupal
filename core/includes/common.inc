@@ -4397,11 +4397,11 @@ function _drupal_bootstrap_full($skip = FALSE) {
  * @see drupal_page_header()
  */
 function drupal_page_set_cache($body) {
-  global $base_root;
+  $request = \Drupal::request();
 
   if (drupal_page_is_cacheable()) {
     $cache = (object) array(
-      'cid' => $base_root . request_uri(),
+      'cid' => $request->getSchemeAndHttpHost() . $request->getRequestUri(),
       'data' => array(
         'path' => current_path(),
         'body' => $body,
@@ -5332,7 +5332,9 @@ function drupal_render_cache_by_query($query, $function, $expire = CacheBackendI
  *   $granularity was passed in, more parts are added.
  */
 function drupal_render_cid_parts($granularity = NULL) {
-  global $theme, $base_root, $user;
+  global $theme, $user;
+
+  $request = \Drupal::request();
 
   $cid_parts[] = $theme;
   // If Locale is enabled but we have only one language we do not need it as cid
@@ -5355,7 +5357,7 @@ function drupal_render_cid_parts($granularity = NULL) {
     }
 
     if ($granularity & DRUPAL_CACHE_PER_PAGE) {
-      $cid_parts[] = $base_root . request_uri();
+      $cid_parts[] = $request->getSchemeAndHttpHost() . $request->getRequestUri();
     }
   }
 

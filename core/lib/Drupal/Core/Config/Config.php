@@ -77,6 +77,7 @@ class Config {
    */
   protected $isLoaded = FALSE;
 
+  protected static $directories;
   /**
    * Constructs a configuration object.
    *
@@ -488,5 +489,12 @@ class Config {
     // Preserve integer keys so that config keys are not changed.
     $this->replaceData(NestedArray::mergeDeepArray(array($this->data, $data_to_merge), TRUE));
     return $this;
+  }
+
+  public static function getDirectories() {
+    return static::$directories;
+  }
+  public static function setDirectories($directories) {
+    static::$directories = $directories;
   }
 }

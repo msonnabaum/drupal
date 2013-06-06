@@ -209,9 +209,10 @@ abstract class Database {
    * Process the configuration file for database information.
    */
   final public static function parseConnectionInfo() {
-    global $databases;
+    //global $databases;
 
-    $database_info = is_array($databases) ? $databases : array();
+    //$database_info = is_array($databases) ? $databases : array();
+    $database_info = is_array(self::$databaseInfo) ? self::$databaseInfo : array();
     foreach ($database_info as $index => $info) {
       foreach ($database_info[$index] as $target => $value) {
         // If there is no "driver" property, then we assume it's an array of
@@ -293,6 +294,14 @@ abstract class Database {
     if (!empty(self::$databaseInfo[$key])) {
       return self::$databaseInfo[$key];
     }
+  }
+
+  final public static function setConnectionInfo($databases) {
+    self::$databaseInfo = $databases;
+  }
+
+  final public static function hasConnectionInfo() {
+    return is_array(self::$databaseInfo);
   }
 
   /**

@@ -1835,8 +1835,8 @@ function form_builder($form_id, &$element, &$form_state) {
   if (isset($element['#type']) && $element['#type'] == 'form') {
     if (!empty($element['#https']) && settings()->get('mixed_mode_sessions', FALSE) &&
         !url_is_external($element['#action'])) {
-      global $base_root;
 
+      $base_root = Drupal::request()->getSchemeAndHttpHost();
       // Not an external URL so ensure that it is secure.
       $element['#action'] = str_replace('http://', 'https://', $base_root) . $element['#action'];
     }

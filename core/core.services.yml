@@ -156,6 +156,8 @@ services:
     arguments: ['@container.namespaces']
   request:
     class: Symfony\Component\HttpFoundation\Request
+    factory_class: Symfony\Component\HttpFoundation\Request
+    factory_method: createFromGlobals
   event_dispatcher:
     class: Symfony\Component\EventDispatcher\ContainerAwareEventDispatcher
     arguments: ['@service_container']

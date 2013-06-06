@@ -7,7 +7,10 @@
 
 namespace Drupal\Core;
 
+use Drupal\Component\Utility\Settings;
 use Drupal\Component\PhpStorage\PhpStorageFactory;
+use Drupal\Component\Utility\Timer;
+use Drupal\Component\Utility\Unicode;
 use Drupal\Core\Config\BootstrapConfigStorageFactory;
 use Drupal\Core\CoreBundle;
 use Drupal\Core\DependencyInjection\ContainerBuilder;
@@ -16,6 +19,7 @@ use Symfony\Component\ClassLoader\ClassLoader;
 use Symfony\Component\Config\Loader\LoaderInterface;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBag;
 use Symfony\Component\DependencyInjection\Dumper\PhpDumper;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Kernel;
 
 /**
@@ -127,10 +131,10 @@ class DrupalKernel extends Kernel implements DrupalKernelInterface {
    *   (optional) FALSE to stop the container from being written to or read
    *   from disk. Defaults to TRUE.
    */
-  public function __construct($environment, $debug, ClassLoader $class_loader, $allow_dumping = TRUE) {
+  public function __construct($environment, $debug, $allow_dumping = TRUE) {
     parent::__construct($environment, $debug);
-    $this->classLoader = $class_loader;
     $this->allowDumping = $allow_dumping;
+    $this->initializeEnvironment();
   }
 
   /**
@@ -165,6 +169,10 @@ class DrupalKernel extends Kernel implements DrupalKernelInterface {
     if ($this->booted) {
       return;
     }
+
+    // Detect string handling method.
+    Unicode::check();
+
     $this->initializeContainer();
     $this->booted = TRUE;
     if ($this->containerNeedsDumping && !$this->dumpDrupalContainer($this->container, $this->getContainerBaseClass())) {
@@ -172,6 +180,32 @@ class DrupalKernel extends Kernel implements DrupalKernelInterface {
     }
   }
 
+  public function handle(Request $request, $type = HttpKernelInterface::MASTER_REQUEST, $catch = TRUE) {
+    if ($this->booted === FALSE) {
+      $this->boot();
+    }
+    drupal_bootstrap(DRUPAL_BOOTSTRAP_CODE);
+        // @todo Refactor with the Symfony Request object.
+    _current_path($request->attributes->get('system_path'));
+        // Deny execution with enabled "magic quotes" (both GPC and runtime).
+    if (get_magic_quotes_gpc() || get_magic_quotes_runtime()) {
+      $message = "PHP's 'magic_quotes_gpc' and 'magic_quotes_runtime' settings are not supported and must be disabled.";
+      return new Response($message, 500);
+    }
+    return parent::handle($request, $type, $catch);
+  }
+
+
+  public function getClassloader() {
+    if (!isset($this->classLoader)) {
+      $this->classLoader = drupal_classloader();
+    }
+    return $this->classLoader;
+  }
+
+  public function setClassloader($class_loader) {
+    $this->classLoader = $class_loader;
+  }
   /**
    * Returns an array of available bundles.
    *
@@ -294,6 +328,29 @@ class DrupalKernel extends Kernel implements DrupalKernelInterface {
     return implode('_', $parts);
   }
 
+  protected function initializeEnvironment() {
+    // Enforce E_STRICT, but allow users to set levels not part of E_STRICT.
+    error_reporting(E_STRICT | E_ALL | error_reporting());
+
+    // Override PHP settings required for Drupal to work properly.
+    // sites/default/default.settings.php contains more runtime settings.
+    // The .htaccess file contains settings that cannot be changed at runtime.
+
+    // Use session cookies, not transparent sessions that puts the session id in
+    // the query string.
+    ini_set('session.use_cookies', '1');
+    ini_set('session.use_only_cookies', '1');
+    ini_set('session.use_trans_sid', '0');
+    // Don't send HTTP headers using PHP's session handler.
+    // Send an empty string to disable the cache limiter.
+    ini_set('session.cache_limiter', '');
+    // Use httponly session cookies.
+    ini_set('session.cookie_httponly', '1');
+
+    // Set sane locale settings, to ensure consistent string, dates, times and
+    // numbers handling.
+    setlocale(LC_ALL, 'C');
+}
   /**
    * Initializes the service container.
    */
@@ -334,12 +391,16 @@ class DrupalKernel extends Kernel implements DrupalKernelInterface {
       // All namespaces must be registered before we attempt to use any service
       // from the container.
       $container_modules = $this->container->getParameter('container.modules');
-      $namespaces_before = $this->classLoader->getPrefixes();
+      $namespaces_before = $this->getClassLoader()->getPrefixes();
       $this->registerNamespaces($this->getModuleNamespaces($container_modules));
 
       // If 'container.modules' is wrong, the container must be rebuilt.
       if (!isset($this->moduleList)) {
-        $this->moduleList = $this->container->get('config.factory')->get('system.module')->load()->get('enabled');
+        $config_fac = $this->container->get('config.factory');
+        $systemmod = $this->container->get('config.factory')->get('system.module');
+        $module_list = $this->container->get('config.factory')->get('system.module')->load();
+        $this->moduleList = $module_list->get('enabled') ?: array();
+        //$this->moduleList = $this->container->get('config.factory')->get('system.module')->load()->get('enabled');
       }
       if (array_keys($this->moduleList) !== array_keys($container_modules)) {
         $persist = $this->getServicesToPersist();
@@ -348,7 +409,7 @@ class DrupalKernel extends Kernel implements DrupalKernelInterface {
         // registerNamespaces() performs a merge rather than replace, so to
         // effectively remove erroneous registrations, we must replace them with
         // empty arrays.
-        $namespaces_after = $this->classLoader->getPrefixes();
+        $namespaces_after = $this->getClassLoader()->getPrefixes();
         $namespaces_before += array_fill_keys(array_diff(array_keys($namespaces_after), array_keys($namespaces_before)), array());
         $this->registerNamespaces($namespaces_before);
       }
@@ -372,7 +433,7 @@ class DrupalKernel extends Kernel implements DrupalKernelInterface {
 
     $this->container->set('kernel', $this);
     // Set the class loader which was registered as a synthetic service.
-    $this->container->set('class_loader', $this->classLoader);
+    $this->container->set('class_loader', $this->getClassLoader());
     // If we have a request set it back to the new container.
     if (isset($request)) {
       $this->container->enterScope('request');
@@ -409,8 +470,7 @@ class DrupalKernel extends Kernel implements DrupalKernelInterface {
       }
     }
   }
-
-  /**
+ /**
    * Builds the service container.
    *
    * @return ContainerBuilder The compiled service container
@@ -472,7 +532,7 @@ class DrupalKernel extends Kernel implements DrupalKernelInterface {
     return new ContainerBuilder(new ParameterBag($this->getKernelParameters()));
   }
 
-  /**
+/**
    * Dumps the service container to PHP code in the config directory.
    *
    * This method is based on the dumpContainer method in the parent class, but
@@ -508,9 +568,7 @@ class DrupalKernel extends Kernel implements DrupalKernelInterface {
    * method are responsible for ensuring the Config component exists.
    */
   public function registerContainerConfiguration(LoaderInterface $loader) {
-  }
-
-  /**
+  }  /**
    * Gets the PHP code storage object to use for the compiled container.
    *
    * @return \Drupal\Component\PhpStorage\PhpStorageInterface
@@ -550,6 +608,6 @@ class DrupalKernel extends Kernel implements DrupalKernelInterface {
    * Registers a list of namespaces.
    */
   protected function registerNamespaces(array $namespaces = array()) {
-    $this->classLoader->addPrefixes($namespaces);
+    $this->getClassLoader()->addPrefixes($namespaces);
   }
 }

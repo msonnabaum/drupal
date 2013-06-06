@@ -83,6 +83,8 @@ class Drupal {
    */
   protected static $container;
 
+  protected static $hashSalt;
+
   /**
    * Sets a new global container.
    *
@@ -361,4 +363,11 @@ class Drupal {
     return static::$container->get('token');
   }
 
+  public static function hashSalt() {
+    return static::$hashSalt;
+  }
+
+  public static function setHashSalt($hash_salt) {
+    static::$hashSalt = $hash_salt;
+  }
 }

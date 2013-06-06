@@ -171,6 +171,7 @@ function _drupal_session_write($sid, $value) {
 
     // For performance reasons, do not update the sessions table, unless
     // $_SESSION has changed or more than 180 has passed since the last update.
+    $request = Drupal::request();
     if ($is_changed || !isset($user->timestamp) || REQUEST_TIME - $user->timestamp > settings()->get('session_write_interval', 180)) {
       // Either ssid or sid or both will be added from $key below.
       $fields = array(
